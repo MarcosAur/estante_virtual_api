@@ -19,6 +19,14 @@ class AuthController extends Controller
 {
     public function register(RegisterRequest $request): JsonResponse
     {
+        $registrationEnabled = config('auth.registration_enabled', true);
+
+        if (!$registrationEnabled) {
+            return response()->json([
+                'message' => 'Novos cadastros estão temporariamente desativados no sistema.',
+            ], 403);
+        }
+
         $user = User::create([
             'name' => $request->name,
             'email' => $request->email,

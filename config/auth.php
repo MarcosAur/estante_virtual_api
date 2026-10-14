@@ -18,6 +18,11 @@ return [
         'passwords' => env('AUTH_PASSWORD_BROKER', 'users'),
     ],
 
+    'registration_enabled' => filter_var(
+        env('VITE_ENABLE_REGISTER', env('ENABLE_REGISTRATION', true)),
+        FILTER_VALIDATE_BOOLEAN
+    ),
+
     /*
     |--------------------------------------------------------------------------
     | Authentication Guards

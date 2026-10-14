@@ -180,4 +180,30 @@ class BookApiTest extends TestCase
         $this->getJson('/api/v1/goals/2026')->assertStatus(404);
         $this->putJson('/api/v1/goals/2026', ['target' => 20])->assertStatus(404);
     }
+
+    public function test_can_disable_user_registration_via_env(): void
+    {
+        config(['auth.registration_enabled' => false]);
+
+        $response = $this->postJson('/api/v1/auth/register', [
+            'name' => 'Novo Usuário',
+            'email' => 'novo@teste.com',
+            'password' => 'senhaSegura123',
+            'password_confirmation' => 'senhaSegura123',
+        ]);
+
+        $response->assertStatus(403);
+        $response->assertJson(['message' => 'Novos cadastros estão temporariamente desativados no sistema.']);
+
+        config(['auth.registration_enabled' => true]);
+
+        $responseSuccess = $this->postJson('/api/v1/auth/register', [
+            'name' => 'Novo Usuário',
+            'email' => 'novo@teste.com',
+            'password' => 'senhaSegura123',
+            'password_confirmation' => 'senhaSegura123',
+        ]);
+
+        $responseSuccess->assertStatus(201);
+    }
 }
