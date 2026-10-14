@@ -1,0 +1,32 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    /**
+     * Run the migrations.
+     */
+    public function up(): void
+    {
+        Schema::dropIfExists('reading_goals');
+    }
+
+    /**
+     * Reverse the migrations.
+     */
+    public function down(): void
+    {
+        Schema::create('reading_goals', function (Blueprint $table) {
+            $table->ulid('id')->primary();
+            $table->foreignId('user_id')->constrained('users')->cascadeOnDelete();
+            $table->integer('year');
+            $table->integer('target')->default(12);
+            $table->timestamps();
+
+            $table->unique(['user_id', 'year']);
+        });
+    }
+};
