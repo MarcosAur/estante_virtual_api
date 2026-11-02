@@ -112,8 +112,9 @@ class AuthController extends Controller
 
         // Delete user private files
         Storage::disk('local')->deleteDirectory("private/covers/{$user->id}");
+        Storage::disk('local')->deleteDirectory("private/posters/{$user->id}");
 
-        // Delete user (cascade on delete removes books, reviews, tags)
+        // Delete user (cascade on delete removes books, reviews, tags, movies, movie reviews)
         $user->tokens()->delete();
         $user->delete();
 

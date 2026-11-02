@@ -3,6 +3,8 @@
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\BookController;
 use App\Http\Controllers\Api\V1\LookupController;
+use App\Http\Controllers\Api\V1\MovieController;
+use App\Http\Controllers\Api\V1\MovieReviewController;
 use App\Http\Controllers\Api\V1\ReviewController;
 use App\Http\Controllers\Api\V1\StatsController;
 use App\Http\Controllers\Api\V1\TagController;
@@ -47,6 +49,27 @@ Route::prefix('v1')->group(function () {
         // Reviews global listing
         Route::get('/reviews', [ReviewController::class, 'index']);
 
+        // Movies & Shelf
+        Route::get('/movies', [MovieController::class, 'index']);
+        Route::post('/movies', [MovieController::class, 'store']);
+        Route::get('/movies/{movie}', [MovieController::class, 'show']);
+        Route::put('/movies/{movie}', [MovieController::class, 'update']);
+        Route::delete('/movies/{movie}', [MovieController::class, 'destroy']);
+
+        Route::patch('/movies/{movie}/status', [MovieController::class, 'updateStatus']);
+        Route::post('/movies/{movie}/poster', [MovieController::class, 'uploadPoster']);
+        Route::get('/movies/{movie}/poster', [MovieController::class, 'getPoster']);
+        Route::delete('/movies/{movie}/poster', [MovieController::class, 'deletePoster']);
+
+        // Reviews for specific movie
+        Route::get('/movies/{movie}/review', [MovieReviewController::class, 'show']);
+        Route::post('/movies/{movie}/review', [MovieReviewController::class, 'storeOrUpdate']);
+        Route::put('/movies/{movie}/review', [MovieReviewController::class, 'storeOrUpdate']);
+        Route::delete('/movies/{movie}/review', [MovieReviewController::class, 'destroy']);
+
+        // Movie Reviews global listing
+        Route::get('/movie-reviews', [MovieReviewController::class, 'index']);
+
         // Tags
         Route::get('/tags', [TagController::class, 'index']);
         Route::post('/tags', [TagController::class, 'store']);
@@ -57,5 +80,6 @@ Route::prefix('v1')->group(function () {
 
         // External Lookup
         Route::get('/lookup/books', [LookupController::class, 'search']);
+        Route::get('/lookup/movies', [LookupController::class, 'searchMovies']);
     });
 });

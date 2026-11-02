@@ -3,6 +3,8 @@
 namespace Tests\Feature\Isolation;
 
 use App\Models\Book;
+use App\Models\Movie;
+use App\Models\MovieReview;
 use App\Models\Review;
 use App\Models\Tag;
 use App\Models\User;
@@ -19,6 +21,7 @@ class DataIsolationTest extends TestCase
     private User $userA;
     private User $userB;
     private Book $bookA;
+    private Movie $movieA;
 
     protected function setUp(): void
     {
@@ -42,6 +45,14 @@ class DataIsolationTest extends TestCase
             'status' => 'reading',
             'pages' => 350,
             'current_page' => 120,
+        ]);
+
+        $this->movieA = Movie::create([
+            'title' => 'Filme Secreto do Usuario A',
+            'director' => 'Diretor Secreto',
+            'status' => 'watched',
+            'year' => 2023,
+            'watched_at' => now()->toDateString(),
         ]);
     }
 
@@ -214,5 +225,151 @@ class DataIsolationTest extends TestCase
             ],
         ]);
         $response->assertJsonMissing(['reading_goal']);
+    }
+
+    public function test_user_b_cannot_view_user_a_movie_and_gets_404(): void
+    {
+        Sanctum::actingAs($this->userB);
+
+        $response = $this->getJson("/api/v1/movies/{$this->movieA->id}");
+
+        $response->assertStatus(404);
+    }
+
+    public function test_user_b_does_not_see_user_a_movie_in_listings_or_search(): void
+    {
+        Sanctum::actingAs($this->userB);
+
+        $response = $this->getJson('/api/v1/movies');
+        $response->assertStatus(200);
+        $response->assertJsonCount(0, 'data');
+
+        $searchResponse = $this->getJson('/api/v1/movies?q=Secreto');
+        $searchResponse->assertStatus(200);
+        $searchResponse->assertJsonCount(0, 'data');
+    }
+
+    public function test_user_b_cannot_update_user_a_movie(): void
+    {
+        Sanctum::actingAs($this->userB);
+
+        $response = $this->putJson("/api/v1/movies/{$this->movieA->id}", [
+            'title' => 'Tentativa de Hack Filme',
+        ]);
+
+        $response->assertStatus(404);
+        $this->assertDatabaseHas('movies', [
+            'id' => $this->movieA->id,
+            'title' => 'Filme Secreto do Usuario A',
+        ]);
+    }
+
+    public function test_user_b_cannot_delete_user_a_movie(): void
+    {
+        Sanctum::actingAs($this->userB);
+
+        $response = $this->deleteJson("/api/v1/movies/{$this->movieA->id}");
+
+        $response->assertStatus(404);
+        $this->assertDatabaseHas('movies', [
+            'id' => $this->movieA->id,
+            'deleted_at' => null,
+        ]);
+    }
+
+    public function test_user_b_cannot_access_user_a_movie_poster(): void
+    {
+        Storage::fake('local');
+
+        Sanctum::actingAs($this->userA);
+        $file = UploadedFile::fake()->image('poster.jpg');
+        $this->postJson("/api/v1/movies/{$this->movieA->id}/poster", ['poster' => $file])
+            ->assertStatus(200);
+
+        Sanctum::actingAs($this->userB);
+        $response = $this->getJson("/api/v1/movies/{$this->movieA->id}/poster");
+        $response->assertStatus(404);
+    }
+
+    public function test_user_b_cannot_see_user_a_movie_reviews(): void
+    {
+        Sanctum::actingAs($this->userA);
+        $this->postJson("/api/v1/movies/{$this->movieA->id}/review", [
+            'rating' => 5.0,
+            'title' => 'Review confidencial de filme',
+            'body' => 'Excelente!',
+        ])->assertSuccessful();
+
+        Sanctum::actingAs($this->userB);
+
+        $this->getJson("/api/v1/movies/{$this->movieA->id}/review")->assertStatus(404);
+
+        $response = $this->getJson('/api/v1/movie-reviews');
+        $response->assertStatus(200);
+        $response->assertJsonCount(0, 'data');
+    }
+
+    public function test_user_cannot_force_user_id_in_movie_creation(): void
+    {
+        Sanctum::actingAs($this->userB);
+
+        $response = $this->postJson('/api/v1/movies', [
+            'title' => 'Filme Criado pelo User B',
+            'director' => 'Diretor B',
+            'status' => 'want_to_watch',
+            'user_id' => $this->userA->id,
+        ]);
+
+        $response->assertStatus(201);
+        $movieId = $response->json('data.id');
+
+        $this->assertDatabaseHas('movies', [
+            'id' => $movieId,
+            'user_id' => $this->userB->id,
+        ]);
+        $this->assertDatabaseMissing('movies', [
+            'id' => $movieId,
+            'user_id' => $this->userA->id,
+        ]);
+    }
+
+    public function test_user_cannot_attach_other_users_tags_to_movie(): void
+    {
+        Sanctum::actingAs($this->userA);
+        $tagA = Tag::create(['name' => 'Tag Privada Filme A']);
+
+        Sanctum::actingAs($this->userB);
+        $response = $this->postJson('/api/v1/movies', [
+            'title' => 'Filme do User B',
+            'director' => 'Diretor B',
+            'status' => 'want_to_watch',
+            'tag_ids' => [$tagA->id],
+        ]);
+
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors(['tag_ids.0']);
+    }
+
+    public function test_user_b_stats_do_not_include_user_a_movie_data(): void
+    {
+        Sanctum::actingAs($this->userA);
+        MovieReview::create([
+            'movie_id' => $this->movieA->id,
+            'rating' => 4.5,
+            'title' => 'Boa nota',
+            'body' => 'Muito bom.',
+        ]);
+
+        Sanctum::actingAs($this->userB);
+        $response = $this->getJson('/api/v1/stats');
+        $response->assertStatus(200);
+        $response->assertJson([
+            'data' => [
+                'total_movies' => 0,
+                'movies_watched_this_year' => 0,
+                'movies_average_rating' => 0,
+                'movies_reviews_count' => 0,
+            ],
+        ]);
     }
 }

@@ -20,7 +20,7 @@ class BookResource extends JsonResource
             'year' => $this->year,
             'pages' => $this->pages,
             'cover_path' => $this->cover_path,
-            'cover_url' => $this->cover_path ? url("/api/v1/books/{$this->id}/cover") : null,
+            'cover_url' => $this->cover_path ? "/api/v1/books/{$this->id}/cover?v=" . $this->updated_at?->timestamp : null,
             'synopsis' => $this->synopsis,
             'status' => $this->status,
             'current_page' => $this->current_page,
