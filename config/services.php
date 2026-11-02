@@ -35,9 +35,10 @@ return [
         ],
     ],
 
-    'tmdb' => [
-        'api_key' => env('TMDB_API_KEY'),
-        'base_url' => env('TMDB_BASE_URL', 'https://api.themoviedb.org/3'),
+    'openrouter' => [
+        'api_key' => env('OPENROUTER_API_KEY'),
+        'model' => env('OPENROUTER_MODEL', 'google/gemini-2.5-flash'),
+        'base_url' => env('OPENROUTER_BASE_URL', 'https://openrouter.ai/api/v1'),
     ],
 
 ];

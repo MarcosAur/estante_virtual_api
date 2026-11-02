@@ -2,11 +2,11 @@
 
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\BookController;
-use App\Http\Controllers\Api\V1\LookupController;
 use App\Http\Controllers\Api\V1\MovieController;
 use App\Http\Controllers\Api\V1\MovieReviewController;
 use App\Http\Controllers\Api\V1\ReviewController;
 use App\Http\Controllers\Api\V1\StatsController;
+use App\Http\Controllers\Api\V1\SuggestionController;
 use App\Http\Controllers\Api\V1\TagController;
 use Illuminate\Support\Facades\Route;
 
@@ -78,8 +78,10 @@ Route::prefix('v1')->group(function () {
         // Stats
         Route::get('/stats', [StatsController::class, 'index']);
 
-        // External Lookup
-        Route::get('/lookup/books', [LookupController::class, 'search']);
-        Route::get('/lookup/movies', [LookupController::class, 'searchMovies']);
+        // AI Suggestions
+        Route::get('/suggestions', [SuggestionController::class, 'showLatest']);
+        Route::post('/suggestions', [SuggestionController::class, 'generate'])->middleware('throttle:10,1');
+        Route::post('/suggestions/{id}/import', [SuggestionController::class, 'batchImport']);
+        Route::post('/suggested-media/{id}/import', [SuggestionController::class, 'importItem']);
     });
 });
