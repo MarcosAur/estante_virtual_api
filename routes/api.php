@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\V1\ReviewController;
 use App\Http\Controllers\Api\V1\StatsController;
 use App\Http\Controllers\Api\V1\SuggestionController;
 use App\Http\Controllers\Api\V1\TagController;
+use App\Http\Controllers\Api\V1\WritingEntryController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function () {
@@ -83,5 +84,13 @@ Route::prefix('v1')->group(function () {
         Route::post('/suggestions', [SuggestionController::class, 'generate'])->middleware('throttle:10,1');
         Route::post('/suggestions/{id}/import', [SuggestionController::class, 'batchImport']);
         Route::post('/suggested-media/{id}/import', [SuggestionController::class, 'importItem']);
+
+        // Writings
+        Route::get('/writings/summary', [WritingEntryController::class, 'summary']);
+        Route::get('/writings', [WritingEntryController::class, 'index']);
+        Route::post('/writings', [WritingEntryController::class, 'store']);
+        Route::get('/writings/{writing}', [WritingEntryController::class, 'show']);
+        Route::put('/writings/{writing}', [WritingEntryController::class, 'update']);
+        Route::delete('/writings/{writing}', [WritingEntryController::class, 'destroy']);
     });
 });

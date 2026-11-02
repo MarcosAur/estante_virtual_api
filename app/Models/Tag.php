@@ -25,4 +25,9 @@ class Tag extends Model
     {
         return $this->belongsToMany(Movie::class, 'movie_tag', 'tag_id', 'movie_id')->withTimestamps();
     }
+
+    public function writingEntries()
+    {
+        return $this->belongsToMany(WritingEntry::class, 'tag_writing_entry', 'tag_id', 'writing_entry_id')->withTimestamps();
+    }
 }
