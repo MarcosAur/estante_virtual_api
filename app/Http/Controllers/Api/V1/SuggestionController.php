@@ -23,7 +23,7 @@ class SuggestionController extends Controller
 {
     public function showLatest(Request $request): JsonResponse
     {
-        $type = $request->query('type', 'book');
+        $type = $request->query('type', 'movie');
         if (!in_array($type, ['book', 'movie'], true)) {
             return response()->json(['message' => 'Tipo inválido. Deve ser book ou movie.'], 422);
         }

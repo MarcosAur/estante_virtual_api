@@ -503,4 +503,20 @@ class SuggestionApiTest extends TestCase
             return str_contains($userContent, 'Duna Especial');
         });
     }
+
+    public function test_show_latest_defaults_to_movie_when_type_omitted(): void
+    {
+        Suggestion::create([
+            'user_id' => $this->user->id,
+            'type' => 'movie',
+            'prompt' => 'Filmes de ficção científica',
+            'model' => 'google/gemini-2.5-flash',
+        ]);
+
+        $response = $this->getJson('/api/v1/suggestions');
+
+        $response->assertOk()
+            ->assertJsonPath('data.type', 'movie')
+            ->assertJsonPath('data.prompt', 'Filmes de ficção científica');
+    }
 }
