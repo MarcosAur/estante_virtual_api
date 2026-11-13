@@ -33,11 +33,13 @@ class AuthController extends Controller
             'password' => Hash::make($request->password),
         ]);
 
-        $token = $user->createToken('auth_token')->plainTextToken;
+        $expirationMinutes = (int) config('sanctum.expiration', 120);
+        $token = $user->createToken('auth_token', ['*'], now()->addMinutes($expirationMinutes))->plainTextToken;
 
         return response()->json([
             'user' => new UserResource($user),
             'token' => $token,
+            'expires_in' => $expirationMinutes * 60,
         ], 201);
     }
 
@@ -51,12 +53,32 @@ class AuthController extends Controller
             ]);
         }
 
-        $token = $user->createToken('auth_token')->plainTextToken;
+        $expirationMinutes = (int) config('sanctum.expiration', 120);
+        $token = $user->createToken('auth_token', ['*'], now()->addMinutes($expirationMinutes))->plainTextToken;
 
         return response()->json([
             'user' => new UserResource($user),
             'token' => $token,
+            'expires_in' => $expirationMinutes * 60,
         ]);
+    }
+
+    public function refresh(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        if ($user) {
+            $user->currentAccessToken()?->delete();
+            $expirationMinutes = (int) config('sanctum.expiration', 120);
+            $token = $user->createToken('auth_token', ['*'], now()->addMinutes($expirationMinutes))->plainTextToken;
+
+            return response()->json([
+                'user' => new UserResource($user),
+                'token' => $token,
+                'expires_in' => $expirationMinutes * 60,
+            ]);
+        }
+
+        return response()->json(['message' => 'Não autenticado.'], 401);
     }
 
     public function logout(Request $request): JsonResponse
