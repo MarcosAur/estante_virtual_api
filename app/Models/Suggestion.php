@@ -19,7 +19,17 @@ class Suggestion extends Model
         'type',
         'prompt',
         'model',
+        'streaming_services',
+        'use_history',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'streaming_services' => 'array',
+            'use_history' => 'boolean',
+        ];
+    }
 
     public function media(): HasMany
     {

@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Book;
 use App\Models\Movie;
+use App\Models\RejectedSuggestion;
 use App\Models\SuggestedMedia;
 use App\Models\Suggestion;
 use App\Models\User;
@@ -436,13 +437,55 @@ class SuggestionApiTest extends TestCase
             'use_history' => false,
         ]);
 
-        $res->assertStatus(201);
+        $res->assertStatus(201)
+            ->assertJsonPath('data.use_history', false);
+
+        $this->assertDatabaseHas('suggestions', [
+            'user_id' => $this->user->id,
+            'type' => 'book',
+            'use_history' => false,
+        ]);
 
         Http::assertSent(function ($request) {
             $userContent = $request['messages'][1]['content'];
             $systemContent = $request['messages'][0]['content'];
             return str_contains($systemContent, 'NÃO usar seu histórico de avaliações')
                 && !str_contains($userContent, 'Histórico de avaliações da estante');
+        });
+    }
+
+    public function test_prompt_instructs_titles_in_portuguese(): void
+    {
+        $this->mockOpenRouterSuccess([
+            [
+                'title' => 'O Poderoso Chefão',
+                'creator' => 'Francis Ford Coppola',
+                'year' => 1972,
+                'synopsis' => 'Um épico da máfia.',
+                'reason' => 'Grande clássico do cinema.',
+            ],
+        ]);
+
+        $res = $this->postJson('/api/v1/suggestions', [
+            'type' => 'movie',
+            'prompt' => 'Filmes clássicos de máfia',
+        ]);
+
+        $res->assertStatus(201)
+            ->assertJsonPath('data.use_history', true);
+
+        $this->assertDatabaseHas('suggestions', [
+            'user_id' => $this->user->id,
+            'type' => 'movie',
+            'use_history' => true,
+        ]);
+
+        Http::assertSent(function ($request) {
+            $systemContent = $request['messages'][0]['content'];
+            $userContent = $request['messages'][1]['content'];
+
+            return str_contains($systemContent, 'português (título oficial')
+                && str_contains($userContent, 'português (título oficial de lançamento no Brasil)');
         });
     }
 
@@ -518,5 +561,217 @@ class SuggestionApiTest extends TestCase
         $response->assertOk()
             ->assertJsonPath('data.type', 'movie')
             ->assertJsonPath('data.prompt', 'Filmes de ficção científica');
+    }
+
+    public function test_can_generate_with_streaming_services_and_includes_them_in_prompt(): void
+    {
+        $this->mockOpenRouterSuccess([
+            [
+                'title' => 'Interestelar',
+                'creator' => 'Christopher Nolan',
+                'year' => 2014,
+                'synopsis' => 'Viagem pelo espaço para salvar a humanidade.',
+                'reason' => 'Disponível na Max e Prime Video.',
+            ],
+        ]);
+
+        $response = $this->postJson('/api/v1/suggestions', [
+            'type' => 'movie',
+            'prompt' => 'Filme de exploração espacial',
+            'streaming_services' => ['Netflix', 'Max'],
+        ]);
+
+        $response->assertStatus(201)
+            ->assertJsonPath('data.streaming_services', ['Netflix', 'Max'])
+            ->assertJsonPath('data.model', 'google/gemini-3.5-flash');
+
+        Http::assertSent(function ($request) {
+            $systemContent = $request['messages'][0]['content'];
+            $userContent = $request['messages'][1]['content'];
+
+            return str_contains($systemContent, 'Netflix, Max')
+                && str_contains($userContent, 'Netflix, Max')
+                && str_contains($systemContent, 'Gere exatamente 10 recomendações');
+        });
+    }
+
+    public function test_can_reject_suggested_item_and_saves_to_cache(): void
+    {
+        $suggestion = Suggestion::create([
+            'user_id' => $this->user->id,
+            'type' => 'movie',
+            'prompt' => 'Filmes de ação',
+            'model' => 'google/gemini-3.5-flash',
+        ]);
+
+        $media = $suggestion->media()->create([
+            'position' => 1,
+            'title' => 'Matrix',
+            'creator' => 'Wachowskis',
+            'year' => 1999,
+        ]);
+
+        $response = $this->postJson("/api/v1/suggested-media/{$media->id}/reject");
+
+        $response->assertOk()
+            ->assertJsonPath('message', "Item 'Matrix' rejeitado e adicionado ao cache de exclusão.");
+
+        $this->assertDatabaseMissing('suggested_media', ['id' => $media->id]);
+        $this->assertDatabaseHas('rejected_suggestions', [
+            'user_id' => $this->user->id,
+            'type' => 'movie',
+            'title' => 'Matrix',
+        ]);
+    }
+
+    public function test_user_cannot_reject_item_belonging_to_another_user(): void
+    {
+        $otherUser = User::factory()->create();
+        Sanctum::actingAs($otherUser);
+
+        $suggestion = Suggestion::create([
+            'type' => 'movie',
+            'prompt' => 'Filmes de terror',
+            'model' => 'google/gemini-3.5-flash',
+        ]);
+
+        $media = $suggestion->media()->create([
+            'position' => 1,
+            'title' => 'O Iluminado',
+            'creator' => 'Stanley Kubrick',
+            'year' => 1980,
+        ]);
+
+        Sanctum::actingAs($this->user);
+
+        $response = $this->postJson("/api/v1/suggested-media/{$media->id}/reject");
+
+        $response->assertStatus(404);
+        $this->assertDatabaseHas('suggested_media', ['id' => $media->id]);
+    }
+
+    public function test_regenerating_suggestions_automatically_caches_unimported_items_as_rejected(): void
+    {
+        $suggestion = Suggestion::create([
+            'user_id' => $this->user->id,
+            'type' => 'movie',
+            'prompt' => 'Primeira lista',
+            'model' => 'google/gemini-3.5-flash',
+        ]);
+
+        $suggestion->media()->create([
+            'position' => 1,
+            'title' => 'Filme Descartado 1',
+            'creator' => 'Diretor A',
+            'year' => 2020,
+        ]);
+
+        $suggestion->media()->create([
+            'position' => 2,
+            'title' => 'Filme Descartado 2',
+            'creator' => 'Diretor B',
+            'year' => 2021,
+        ]);
+
+        $this->mockOpenRouterSuccess([
+            [
+                'title' => 'Novo Filme 1',
+                'creator' => 'Diretor C',
+                'year' => 2022,
+                'synopsis' => 'Sinopse',
+                'reason' => 'Motivo',
+            ],
+        ]);
+
+        $this->postJson('/api/v1/suggestions', [
+            'type' => 'movie',
+            'prompt' => 'Segunda lista',
+        ])->assertStatus(201);
+
+        $this->assertDatabaseHas('rejected_suggestions', [
+            'user_id' => $this->user->id,
+            'type' => 'movie',
+            'title' => 'Filme Descartado 1',
+        ]);
+        $this->assertDatabaseHas('rejected_suggestions', [
+            'user_id' => $this->user->id,
+            'type' => 'movie',
+            'title' => 'Filme Descartado 2',
+        ]);
+    }
+
+    public function test_rejected_suggestions_cache_caps_at_thirty_most_recent_items(): void
+    {
+        // Seed 35 rejected movies with explicit timestamps
+        for ($i = 1; $i <= 35; $i++) {
+            $record = new RejectedSuggestion([
+                'type' => 'movie',
+                'title' => "Filme Antigo {$i}",
+                'normalized_title' => "filmeantigo{$i}",
+            ]);
+            $record->user_id = $this->user->id;
+            $record->timestamps = false;
+            $record->created_at = now()->subMinutes(40 - $i);
+            $record->updated_at = now()->subMinutes(40 - $i);
+            $record->save();
+        }
+
+        $this->mockOpenRouterSuccess([
+            [
+                'title' => 'Blade Runner 2049',
+                'creator' => 'Denis Villeneuve',
+                'year' => 2017,
+                'synopsis' => 'Ficção cyberpunk.',
+                'reason' => 'Excelente fotografia.',
+            ],
+        ]);
+
+        $suggestion = Suggestion::create([
+            'user_id' => $this->user->id,
+            'type' => 'movie',
+            'prompt' => 'Sci-fi',
+            'model' => 'google/gemini-3.5-flash',
+        ]);
+
+        $media = $suggestion->media()->create([
+            'position' => 1,
+            'title' => 'Novo Filme Rejeitado',
+            'creator' => 'Diretor X',
+            'year' => 2024,
+        ]);
+
+        // Reject item to trigger cache bounds
+        $this->postJson("/api/v1/suggested-media/{$media->id}/reject")->assertOk();
+
+        // Must cap at 30 items
+        $count = RejectedSuggestion::where('user_id', $this->user->id)
+            ->where('type', 'movie')
+            ->count();
+
+        $this->assertEquals(30, $count);
+
+        // Oldest items (1 through 5) should be pruned
+        $this->assertDatabaseMissing('rejected_suggestions', [
+            'user_id' => $this->user->id,
+            'type' => 'movie',
+            'title' => 'Filme Antigo 1',
+        ]);
+        $this->assertDatabaseMissing('rejected_suggestions', [
+            'user_id' => $this->user->id,
+            'type' => 'movie',
+            'title' => 'Filme Antigo 5',
+        ]);
+
+        // Latest items and newly rejected item must be present
+        $this->assertDatabaseHas('rejected_suggestions', [
+            'user_id' => $this->user->id,
+            'type' => 'movie',
+            'title' => 'Filme Antigo 35',
+        ]);
+        $this->assertDatabaseHas('rejected_suggestions', [
+            'user_id' => $this->user->id,
+            'type' => 'movie',
+            'title' => 'Novo Filme Rejeitado',
+        ]);
     }
 }

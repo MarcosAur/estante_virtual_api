@@ -18,6 +18,8 @@ class GenerateSuggestionRequest extends FormRequest
             'type' => ['required', 'string', Rule::in(['book', 'movie'])],
             'prompt' => ['required', 'string', 'max:1000'],
             'use_history' => ['sometimes', 'boolean'],
+            'streaming_services' => ['sometimes', 'array', 'max:10'],
+            'streaming_services.*' => ['string', 'max:50'],
         ];
     }
 }

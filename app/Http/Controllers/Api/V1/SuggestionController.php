@@ -47,7 +47,8 @@ class SuggestionController extends Controller
                 $user,
                 $request->input('type'),
                 $request->input('prompt'),
-                $request->boolean('use_history', true)
+                $request->boolean('use_history', true),
+                $request->input('streaming_services', [])
             );
         } catch (RuntimeException $e) {
             return response()->json([
@@ -58,6 +59,30 @@ class SuggestionController extends Controller
         return response()->json([
             'data' => new SuggestionResource($suggestion),
         ], 201);
+    }
+
+    public function rejectItem(string $id, AiSuggestionService $service): JsonResponse
+    {
+        $userId = Auth::id();
+        $item = SuggestedMedia::where('id', $id)
+            ->whereHas('suggestion', fn($q) => $q->where('user_id', $userId))
+            ->with('suggestion')
+            ->first();
+
+        if (!$item) {
+            return response()->json(['message' => 'Item sugerido não encontrado.'], 404);
+        }
+
+        $type = $item->suggestion->type;
+        $title = $item->title;
+
+        $service->recordRejections(Auth::user(), $type, [$title]);
+
+        $item->delete();
+
+        return response()->json([
+            'message' => "Item '{$title}' rejeitado e adicionado ao cache de exclusão.",
+        ]);
     }
 
     public function importItem(ImportSuggestedMediaRequest $request, string $id): JsonResponse

@@ -85,6 +85,7 @@ Route::prefix('v1')->group(function () {
         Route::post('/suggestions', [SuggestionController::class, 'generate'])->middleware('throttle:10,1');
         Route::post('/suggestions/{id}/import', [SuggestionController::class, 'batchImport']);
         Route::post('/suggested-media/{id}/import', [SuggestionController::class, 'importItem']);
+        Route::post('/suggested-media/{id}/reject', [SuggestionController::class, 'rejectItem']);
 
         // Writings
         Route::get('/writings/summary', [WritingEntryController::class, 'summary']);

@@ -14,6 +14,8 @@ class SuggestionResource extends JsonResource
             'type' => $this->type,
             'prompt' => $this->prompt,
             'model' => $this->model,
+            'streaming_services' => $this->streaming_services ?? [],
+            'use_history' => (bool) ($this->use_history ?? true),
             'media' => SuggestedMediaResource::collection($this->whenLoaded('media')),
             'created_at' => $this->created_at?->toISOString(),
             'updated_at' => $this->updated_at?->toISOString(),
