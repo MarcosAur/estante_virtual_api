@@ -152,6 +152,50 @@ class MovieApiTest extends TestCase
 
         $response->assertStatus(422);
         $response->assertJsonValidationErrors(['poster']);
+        $response->assertJsonFragment([
+            'poster' => ['O pôster não pode ultrapassar o tamanho máximo de 5 MB.'],
+        ]);
+    }
+
+    public function test_cannot_create_movie_with_poster_larger_than_5mb(): void
+    {
+        Storage::fake('local');
+
+        $file = UploadedFile::fake()->create('poster_grande.jpg', 6000, 'image/jpeg');
+
+        $response = $this->postJson('/api/v1/movies', [
+            'title' => 'Filme com Poster Gigante',
+            'status' => 'want_to_watch',
+            'poster' => $file,
+        ]);
+
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors(['poster']);
+        $response->assertJsonFragment([
+            'poster' => ['O pôster não pode ultrapassar o tamanho máximo de 5 MB.'],
+        ]);
+    }
+
+    public function test_cannot_update_movie_with_poster_larger_than_5mb(): void
+    {
+        Storage::fake('local');
+        $movie = Movie::create([
+            'title' => 'Filme Existente',
+            'status' => 'want_to_watch',
+        ]);
+
+        $file = UploadedFile::fake()->create('poster_grande.jpg', 6000, 'image/jpeg');
+
+        $response = $this->postJson("/api/v1/movies/{$movie->id}", [
+            '_method' => 'PUT',
+            'poster' => $file,
+        ]);
+
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors(['poster']);
+        $response->assertJsonFragment([
+            'poster' => ['O pôster não pode ultrapassar o tamanho máximo de 5 MB.'],
+        ]);
     }
 
     public function test_cannot_upload_invalid_poster_format(): void

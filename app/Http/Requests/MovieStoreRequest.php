@@ -36,4 +36,13 @@ class MovieStoreRequest extends FormRequest
             ],
         ];
     }
+
+    public function messages(): array
+    {
+        return [
+            'poster.max' => 'O pôster não pode ultrapassar o tamanho máximo de 5 MB.',
+            'poster.image' => 'O arquivo de pôster deve ser uma imagem válida.',
+            'poster.mimes' => 'O pôster deve estar nos formatos PNG, JPG ou JPEG.',
+        ];
+    }
 }

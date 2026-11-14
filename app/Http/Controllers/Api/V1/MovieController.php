@@ -165,6 +165,11 @@ class MovieController extends Controller
     {
         $request->validate([
             'poster' => ['required', 'image', 'mimes:png,jpg,jpeg', 'max:5120'],
+        ], [
+            'poster.required' => 'O arquivo de pôster é obrigatório.',
+            'poster.max' => 'O pôster não pode ultrapassar o tamanho máximo de 5 MB.',
+            'poster.image' => 'O arquivo de pôster deve ser uma imagem válida.',
+            'poster.mimes' => 'O pôster deve estar nos formatos PNG, JPG ou JPEG.',
         ]);
 
         if ($movie->poster_path && Storage::disk('local')->exists($movie->poster_path)) {
